@@ -1,36 +1,38 @@
 const BigInt = require("big-integer");
+const crypto = require('crypto');
 
-const base = 128;
+const base = 256;
 const Limit = 128;
-const noOfProbabilityTests = 60;
 let set = '';
 
-for(let i=0;i<base;i++){
+for(let i=0;i<256;i++){
 	set += String.fromCharCode(i);
 }
 
 const RandomBig = () => {
+	let buffer = new Uint8Array(Limit);
+	crypto.randomFillSync(buffer);
 	let random = new BigInt(String.fromCharCode(0), base, set, true);
-	random = random.add(Math.floor(Math.random()*1000)%256);
-	for(let i=1;i<Limit;i++){
-		random = random.multiply(base).add(Math.floor(Math.random()*1000)%256);
+	for(let i=0;i<Limit;i++){
+		random = random.multiply(base).add(buffer[i]);
 	}
 	return random;
 };
 
+const randomGenerator = () => {
+	var randomBuffer = new Uint16Array(1);
+	crypto.randomFillSync(randomBuffer);
+	return randomBuffer[0];
+};
+
 const GeneratePrime = () => {
-	let prime = RandomBig();
-	for(let i=0;i<354;i++){
-		if(prime.isDivisibleBy(2)){
-			prime = prime.add(1);
-		}
-		if(prime.isProbablePrime(noOfProbabilityTests)){
-			break;
-		}else{
-			prime = prime.add(2);
-		}
+	const generator = randomGenerator();
+	const prime = crypto.createDiffieHellman(Limit*8, generator).getPrime();
+	let primeBigInt = new BigInt(String.fromCharCode(0), base, set, true);
+	for(let i=0;i<Limit;i++){
+		primeBigInt = primeBigInt.multiply(base).add(prime[i]);
 	}
-	return prime;
+	return primeBigInt;
 };
 
 exports.RsaKeyGeneration = () => {
@@ -38,9 +40,10 @@ exports.RsaKeyGeneration = () => {
 	let q = GeneratePrime();
 	let n = p.multiply(q);
 	let phi = p.minus(1).multiply(q.minus(1));
-	let e = RandomBig().mod(phi.subtract(1)).add(1);
+
+	let e = RandomBig().mod(phi.subtract(1)).add(2);
 	while(BigInt.gcd(e, phi)!=1){
-		e = e.add(1);
+		e = RandomBig().mod(phi.subtract(1)).add(2);
 	}
 	let d = e.modInv(phi);
 	return ({public: e.toString(base, set), private: d.toString(base, set), n: n.toString(base, set)});
