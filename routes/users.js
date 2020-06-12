@@ -7,8 +7,9 @@ const RSA = require('../encryption/rsa');
 const config = require('../config');
 const twilio = require('twilio')(config.twilio.accountSid, config.twilio.authToken);
 const mongoose = require('mongoose');
-const fs = require('fs');
 const multer = require('multer');
+const Message = require('../models/message');
+const Status = require('../models/status');
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -22,10 +23,77 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+const updateMessageKeys = (userId, oldKeys, newKeys) => {
+    Message.find({$or: [{from: userId}, {to: userId}]})
+    .select('from to key')
+    .then(messages => {
+        const myMessages = messages.filter(message => String(message.to) == userId);
+        const otherMessages = messages.filter(message => String(message.from) == userId);
+        otherMessages.forEach(message => {
+            const oldKey = message.key;
+            const decryptedKey = RSA.Decryption(oldKey, {private: oldKeys.public, n: oldKeys.n});
+            const newKey = RSA.Encryption(decryptedKey, {public: newKeys.private, n: newKeys.n});
+            message.key = newKey;
+            message.save();
+        });
+        const targetUsers = [];
+        myMessages.forEach(message => {
+            targetUsers.push(message.from);
+        });
+        User.find({_id: {$in: targetUsers}})
+        .select('_id public private n')
+        .then(users => {
+            const userKeysMap = {};
+            users.forEach(user => {
+                userKeysMap[user._id] = {
+                    public: user.public,
+                    private: user.private,
+                    n: user.n
+                };
+            });
+            myMessages.forEach(message => {
+                const oldKey = message.key;
+                const decryptedKey = RSA.Decryption(
+                    RSA.Decryption(oldKey, {
+                        private: userKeysMap[message.from].public,
+                        n: userKeysMap[message.from].n
+                    }), {
+                        private: oldKeys.private,
+                        n: oldKeys.n
+                    }
+                );
+                const newKey = RSA.Encryption(
+                    RSA.Encryption(decryptedKey, {
+                        public: newKeys.public,
+                        n: newKeys.n
+                    }), {
+                        public: userKeysMap[message.from].private,
+                        n: userKeysMap[message.from].n 
+                    }
+                );
+                message.key = newKey;
+                message.save();
+            });
+        });
+    });
+}
+
 router.get('/', auth.verifyUser, auth.verifyToken, (req, res, next) => {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.json({success: true});
+    Message.find({to: req.user._id})
+    .then(messages => {
+        Message.deleteMany({to: req.user._id}).then(() => {});
+        Status.find({from: req.user._id})
+        .then(statusList => {
+            Status.deleteMany({from: req.user._id}).then(() => {});
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.json({
+                success: true,
+                messages: messages,
+                statusList: statusList
+            });
+        });
+    })
 });
 
 router.post('/login', (req, res, next) => {
@@ -47,6 +115,9 @@ router.post('/login', (req, res, next) => {
         // }).then(message => {
             console.log(otp)
             const keys = RSA.RsaKeyGeneration();
+            const oldKeys = {public: user.public, private: user.private, n: user.n};
+            updateMessageKeys(user._id, oldKeys, keys);
+
             user.public = keys.public;
             user.private = keys.private;
             user.n = keys.n;
@@ -206,6 +277,38 @@ router.post('/update-name', auth.verifyUser, auth.verifyToken, (req, res) => {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'alpplication/json');
     res.json({success: true, name: req.body.name});
+});
+
+router.post('/getKeysInBulk', auth.verifyUser, auth.verifyToken, (req, res, next) => {
+    User.find({_id: {$in: req.body.users}})
+    .select('_id public n')
+    .then(users => {
+        let keys = {};
+        users.forEach(user => {
+            keys[user._id] = {
+                public: user.public,
+                private: user.private,
+                n: user.n
+            };
+        });
+        res.statusCode  =200;
+        res.setHeader('Content-Type', 'application/json');
+        res.json(keys);
+    });
+});
+
+router.post('/get-info-in-bulk', auth.verifyUser, auth.verifyToken, (req,res) => {
+    User.find({_id: req.body.users})
+    .select('_id phone image')
+    .then(users => {
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 200;
+        res.json({success: true, users: users});
+    }).catch(err => {
+        res.statusCode = 401;
+        res.setHeader('Content-Type', 'application/json');
+        res.json({success: false, message: err.message});
+    });
 });
 
 module.exports = router;

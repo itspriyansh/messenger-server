@@ -38,6 +38,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 app.use('/users', usersRouter);
 
+const sockets = {};
+
 io.use((socket, next) => {
   if(socket.handshake.query && socket.handshake.query.token){
     jwt.verify(socket.handshake.query.token, config.secretKey, (err, decoded) => {
@@ -47,7 +49,8 @@ io.use((socket, next) => {
         return next(err);
       }
       socket.decoded = decoded;
-      chatsRouter(io,socket);
+      sockets[decoded._id] = socket.id;
+      chatsRouter(io,socket,sockets);
       next();
     });
   }else{

@@ -43,7 +43,10 @@ exports.RsaKeyGeneration = () => {
 
 	let e = RandomBig().mod(phi.subtract(1)).add(2);
 	while(BigInt.gcd(e, phi)!=1){
-		e = RandomBig().mod(phi.subtract(1)).add(2);
+		e = e.add(1);
+		if(e.compare(phi) !== -1) {
+			e = RandomBig().mod(phi.subtract(1)).add(2);
+		}
 	}
 	let d = e.modInv(phi);
 	return ({public: e.toString(base, set), private: d.toString(base, set), n: n.toString(base, set)});
@@ -53,6 +56,7 @@ exports.Encryption = (num, obj) => {
 	let x = BigInt(num, base, set, true);
 	let publicKey = BigInt(obj.public, base, set, true);
 	let n = BigInt(obj.n, base, set, true);
+	if(x.compare(n) !== -1) console.log("Error: key is outof range");
 	let y = x.modPow(publicKey, n).toString(base, set);
 	return y;
 };
