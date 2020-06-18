@@ -114,17 +114,19 @@ router.post('/login', (req, res, next) => {
         //     to: user.phone
         // }).then(message => {
             console.log(otp)
-            const keys = RSA.RsaKeyGeneration();
-            const oldKeys = {public: user.public, private: user.private, n: user.n};
-            updateMessageKeys(user._id, oldKeys, keys);
+            RSA.RsaKeyGeneration()
+            .then(keys => {
+                const oldKeys = {public: user.public, private: user.private, n: user.n};
+                updateMessageKeys(user._id, oldKeys, keys);
 
-            user.public = keys.public;
-            user.private = keys.private;
-            user.n = keys.n;
-            user.save().then(() => {
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.json({success: true, message: `OTP has been sent to ${req.body.phone}, and it will be valid till 5 minutes`});
+                user.public = keys.public;
+                user.private = keys.private;
+                user.n = keys.n;
+                user.save().then(() => {
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.json({success: true, message: `OTP has been sent to ${req.body.phone}, and it will be valid till 5 minutes`});
+                });
             });
         // });
     }).catch(err => {

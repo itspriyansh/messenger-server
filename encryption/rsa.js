@@ -36,20 +36,22 @@ const GeneratePrime = () => {
 };
 
 exports.RsaKeyGeneration = () => {
-	let p = GeneratePrime();
-	let q = GeneratePrime();
-	let n = p.multiply(q);
-	let phi = p.minus(1).multiply(q.minus(1));
+	return new Promise(resolve => {
+		let p = GeneratePrime();
+		let q = GeneratePrime();
+		let n = p.multiply(q);
+		let phi = p.minus(1).multiply(q.minus(1));
 
-	let e = RandomBig().mod(phi.subtract(1)).add(2);
-	while(BigInt.gcd(e, phi)!=1){
-		e = e.add(1);
-		if(e.compare(phi) !== -1) {
-			e = RandomBig().mod(phi.subtract(1)).add(2);
+		let e = RandomBig().mod(phi.subtract(1)).add(2);
+		while(BigInt.gcd(e, phi)!=1){
+			e = e.add(1);
+			if(e.compare(phi) !== -1) {
+				e = RandomBig().mod(phi.subtract(1)).add(2);
+			}
 		}
-	}
-	let d = e.modInv(phi);
-	return ({public: e.toString(base, set), private: d.toString(base, set), n: n.toString(base, set)});
+		let d = e.modInv(phi);
+		resolve({public: e.toString(base, set), private: d.toString(base, set), n: n.toString(base, set)});
+	});
 };
 
 exports.Encryption = (num, obj) => {

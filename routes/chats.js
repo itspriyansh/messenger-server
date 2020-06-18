@@ -40,7 +40,7 @@ module.exports= (io,socket,sockets) => {
             let acknoledgeMentReceived = false;
             const waitForAck = setTimeout(() => {
                 if(!acknoledgeMentReceived) {
-                    Message.create({...messageDetail, to: id});
+                    // Message.create({...messageDetail, to: id});
                 }
             },timeout);
             receiverSocket.on("UpdateStatus", data => {
